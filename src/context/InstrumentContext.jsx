@@ -51,62 +51,72 @@ export function InstrumentProvider({ children }) {
 
     const syncFromSheet = async () => {
         if (!sheetUrl) return;
-        const rawUrl = sheetUrl.trim();
+        const inputUrl = sheetUrl.trim();
 
-        // Extract Document ID and GID
-        const idMatch = rawUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
-        const gidMatch = rawUrl.match(/[#&]gid=([0-9]+)/);
-        const docId = idMatch ? idMatch[1] : null;
+        // BETTER ID EXTRACTION: Handles /d/ID, /d/e/ID, and even direct IDs
+        // Matches standard IDs like 1AbCd-EfG... and Published keys like 2PACX-...
+        const idMatch = inputUrl.match(/\/d\/(?:e\/)?([a-zA-Z0-9-_]+)/) || inputUrl.match(/id=([a-zA-Z0-9-_]+)/);
+        const docId = idMatch ? idMatch[1] : (inputUrl.length > 30 ? inputUrl : null);
+
+        const gidMatch = inputUrl.match(/[#&]gid=([0-9]+)/);
         const gid = gidMatch ? gidMatch[1] : '0';
 
         // Generate candidate endpoints
-        // 1. Original Provided URL
-        // 2. Export URL (if it's a standard sheet ID)
-        // 3. GViz Query URL (often bypasses consent)
-        const candidates = [rawUrl];
-        if (docId && !rawUrl.includes('/d/e/')) {
+        const candidates = [inputUrl];
+        if (docId && docId !== 'e') {
+            // Standard export
             candidates.push(`https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${gid}`);
+            // Account-specific export
+            candidates.push(`https://docs.google.com/spreadsheets/u/0/d/${docId}/export?format=csv&gid=${gid}`);
+            // GViz (The "Secret" data endpoint)
             candidates.push(`https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=${gid}`);
+            // Publication alias
+            candidates.push(`https://docs.google.com/spreadsheets/d/${docId}/pub?output=csv&gid=${gid}`);
         }
 
         const proxies = [
-            { name: 'Direct', wrap: (url) => url + (url.includes('?') ? '&' : '?') + 't=' + Date.now() },
+            { name: 'Direct', wrap: (url) => url + (url.includes('?') ? '&' : '?') + 'cache=' + Date.now() },
             { name: 'CodeTabs', wrap: (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}` },
             { name: 'AllOrigins', wrap: (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}` },
             { name: 'CORSProxy.io', wrap: (url) => `https://corsproxy.io/?` + encodeURIComponent(url) },
-            { name: 'ThingProxy', wrap: (url) => `https://thingproxy.freeboard.io/fetch/${url}` }
+            { name: 'ThingProxy', wrap: (url) => `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(url)}` }
         ];
 
         const isValidCsv = (text) => {
             const t = text.trim();
             if (!t || t.length < 10) return false;
-            if (t.startsWith('<!DOCTYPE') || t.includes('<html') || t.startsWith('{')) return false;
+            // Reject obvious HTML
+            if (t.toLowerCase().startsWith('<!doctype') || t.toLowerCase().includes('<html')) return false;
+            // Reject JSON wrappers if they appear
+            if (t.startsWith('{') && t.endsWith('}')) return false;
+
             const firstLine = t.split('\n')[0];
-            return firstLine.includes(',') || firstLine.includes('\t');
+            // Support comma, tab, or semicolon (Europe)
+            return firstLine.includes(',') || firstLine.includes('\t') || firstLine.includes(';');
         };
 
         const errors = [];
         let successData = null;
 
-        // Matrix Try: Each Candidate URL x Each Proxy
+        // Try the Matrix
         for (const url of candidates) {
             for (const proxy of proxies) {
                 try {
                     const finalUrl = proxy.wrap(url);
-                    const response = await fetch(finalUrl);
+                    const response = await fetch(finalUrl, { credentials: 'omit' });
                     if (response.ok) {
                         const text = await response.text();
                         if (isValidCsv(text)) {
                             successData = text;
                             break;
                         } else {
-                            errors.push(`${proxy.name}: Received HTML/Invalid (Length: ${text.length})`);
+                            errors.push(`${proxy.name}: HTML (Len:${text.length})`);
                         }
                     } else {
-                        errors.push(`${proxy.name}: HTTP ${response.status}`);
+                        errors.push(`${proxy.name}: ${response.status}`);
                     }
                 } catch (e) {
-                    errors.push(`${proxy.name}: ${e.message}`);
+                    errors.push(`${proxy.name}: Error`);
                 }
             }
             if (successData) break;
@@ -115,30 +125,31 @@ export function InstrumentProvider({ children }) {
         try {
             if (!successData) {
                 const combinedErrors = [...new Set(errors)].join(' | ');
-                throw new Error(`Mobile Sync Blocked. Tried ${candidates.length} modes x ${proxies.length} proxies.\nMost likely: Google Consent Wall.\n\nDetails:\n${combinedErrors.substring(0, 300)}...`);
+                throw new Error(`Mobile Sync failed after trying ${candidates.length} URL formats.\n\nRECOMMENDATION: Copy the "SHARE" link from browser and use that.\n\nLOG:\n${combinedErrors.substring(0, 200)}...`);
             }
 
             const text = successData;
             const lines = text.split('\n');
             const newInstruments = [];
 
-            // Skip header (handle both \r\n and \n)
             for (let i = 1; i < lines.length; i++) {
                 const line = lines[i].trim();
                 if (!line) continue;
 
-                // Handle CSV split (simple split by comma)
-                const parts = line.split(',');
+                // Detect delimiter
+                let parts = [];
+                if (line.includes('\t')) parts = line.split('\t');
+                else if (line.includes(';')) parts = line.split(';');
+                else parts = line.split(',');
+
                 if (parts.length < 2) continue;
 
-                // Map based on expected order from Export:
-                // Symbol,TickSize,TickValue,TickPerPoint,PointValue,IcebergThreshold,StopThreshold
                 const [symbol, tickSize, tickValue, tickPerPoint, pointValue, icebergThreshold, stopThreshold] = parts;
 
                 if (symbol && tickSize) {
                     newInstruments.push({
-                        id: crypto.randomUUID(), // New IDs generated on each sync
-                        symbol: symbol.trim(),
+                        id: crypto.randomUUID(),
+                        symbol: symbol.replace(/"/g, '').trim(),
                         tickSize: parseFloat(tickSize),
                         tickValue: parseFloat(tickValue),
                         tickPerPoint: parseFloat(tickPerPoint),
