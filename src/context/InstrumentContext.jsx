@@ -106,8 +106,9 @@ export function InstrumentProvider({ children }) {
             const text = await fetchWithFallback(cleanUrl);
 
             // Check if user provided a standard Google Sheet link (HTML) instead of CSV
-            if (text.trim().startsWith('<!DOCTYPE') || text.includes('<html') || text.includes('docs-chrome')) {
-                throw new Error('Incorrect Link Type. Please use the "Publish to Web" > "CSV" link.');
+            // Also detection for JSON responses if proxies fail to unwrap
+            if (text.trim().startsWith('<!DOCTYPE') || text.includes('<html') || text.includes('docs-chrome') || text.trim().startsWith('{')) {
+                throw new Error(`Incorrect Link Type. Received HTML/JSON instead of CSV.\nPreview: "${text.substring(0, 100)}..."`);
             }
 
             const lines = text.split('\n');
