@@ -145,6 +145,11 @@ export default function InstrumentManager() {
             )}
 
             <InstrumentTable onEdit={handleEdit} isReadOnly={isReadOnly} />
+
+            {/* Version Indicator for Debugging */}
+            <div className="text-center mt-6 text-slate-600 text-[10px] font-mono opacity-50">
+                v1.3 Final Mobile Fix
+            </div>
         </div>
     );
 }

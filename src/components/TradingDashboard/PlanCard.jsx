@@ -1,9 +1,11 @@
 import { Trash2, TrendingUp, TrendingDown, Clock } from 'lucide-react';
 
 export default function PlanCard({ plan, onDelete }) {
-    const { calculations, instrumentSymbol, riskCapital, createdAt } = plan;
+    const { calculations, instrumentSymbol, riskCapital, createdAt, riskRewardRatio } = plan;
 
     const fmt = (num) => num?.toFixed(6);
+
+    const targetPts = calculations.targetProfitPoints || (calculations.riskInPoints * riskRewardRatio);
 
     return (
         <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-xl overflow-hidden shadow-lg hover:shadow-cyan-900/20 transition-all">
@@ -26,14 +28,19 @@ export default function PlanCard({ plan, onDelete }) {
 
             <div className="p-4 space-y-4">
                 {/* Key Metrics Grid */}
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800">
-                        <div className="text-slate-400 text-xs uppercase mb-1">Contracts</div>
-                        <div className="text-xl font-mono text-cyan-300 font-bold">{fmt(calculations.contracts)}</div>
+                {/* Key Metrics Grid */}
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                    <div className="bg-slate-950/50 p-2 rounded-lg border border-slate-800">
+                        <div className="text-slate-400 text-[10px] uppercase mb-1">Contracts</div>
+                        <div className="text-lg font-mono text-cyan-300 font-bold">{fmt(calculations.contracts)}</div>
                     </div>
-                    <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800">
-                        <div className="text-slate-400 text-xs uppercase mb-1">Risk Points</div>
-                        <div className="text-xl font-mono text-amber-500 font-bold">{fmt(calculations.riskInPoints)}</div>
+                    <div className="bg-slate-950/50 p-2 rounded-lg border border-slate-800">
+                        <div className="text-slate-400 text-[10px] uppercase mb-1">Risk Pts</div>
+                        <div className="text-lg font-mono text-amber-500 font-bold">{fmt(calculations.riskInPoints)}</div>
+                    </div>
+                    <div className="bg-slate-950/50 p-2 rounded-lg border border-slate-800">
+                        <div className="text-slate-400 text-[10px] uppercase mb-1">Target Pts</div>
+                        <div className="text-lg font-mono text-emerald-400 font-bold">{fmt(targetPts)}</div>
                     </div>
                 </div>
 

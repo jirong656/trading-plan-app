@@ -127,12 +127,12 @@ export default function PlanCalculator() {
                         <input
                             name="siZoneTop"
                             type="number"
-                            step="0.01"
+                            step="0.000001"
                             value={formData.siZoneTop}
                             onChange={handleChange}
-                            placeholder="e.g. 25540.75"
+                            placeholder="e.g. 150123.234512"
                             required
-                            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-slate-200 focus:outline-none focus:border-cyan-500"
+                            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-2 text-slate-200 font-mono focus:outline-none focus:border-cyan-500"
                         />
                     </div>
                     <div>
@@ -140,12 +140,12 @@ export default function PlanCalculator() {
                         <input
                             name="siZoneBottom"
                             type="number"
-                            step="0.01"
+                            step="0.000001"
                             value={formData.siZoneBottom}
                             onChange={handleChange}
-                            placeholder="e.g. 25535.50"
+                            placeholder="e.g. 150123.000000"
                             required
-                            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-slate-200 focus:outline-none focus:border-cyan-500"
+                            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-2 text-slate-200 font-mono focus:outline-none focus:border-cyan-500"
                         />
                     </div>
                 </div>

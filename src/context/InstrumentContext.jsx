@@ -51,11 +51,54 @@ export function InstrumentProvider({ children }) {
 
     const syncFromSheet = async () => {
         if (!sheetUrl) return;
-        try {
-            const response = await fetch(sheetUrl);
-            if (!response.ok) throw new Error('Failed to fetch CSV');
+        const cleanUrl = sheetUrl.trim();
 
-            const text = await response.text();
+        const fetchWithFallback = async (url) => {
+            let lastError;
+
+            // Attempt 1: Direct Fetch
+            try {
+                const response = await fetch(url);
+                if (response.ok) return await response.text();
+                lastError = `Direct: ${response.status}`;
+            } catch (e) {
+                console.warn("Direct fetch failed", e);
+                lastError = `Direct: ${e.message}`;
+            }
+
+            // Attempt 2: AllOrigins Proxy
+            try {
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+                const response = await fetch(proxyUrl);
+                if (response.ok) return await response.text();
+                lastError = `AllOrigins: ${response.status}`;
+            } catch (e) {
+                console.warn("AllOrigins failed", e);
+                lastError = `AllOrigins: ${e.message}`;
+            }
+
+            // Attempt 3: CORSProxy.io
+            try {
+                const proxyUrl = `https://corsproxy.io/?` + encodeURIComponent(url);
+                const response = await fetch(proxyUrl);
+                if (response.ok) return await response.text();
+                lastError = `CORSProxy: ${response.status}`;
+            } catch (e) {
+                console.warn("CORSProxy failed", e);
+                lastError = `CORSProxy: ${e.message}`;
+            }
+
+            throw new Error(`All methods failed. Last error: ${lastError}`);
+        };
+
+        try {
+            const text = await fetchWithFallback(cleanUrl);
+
+            // Check if user provided a standard Google Sheet link (HTML) instead of CSV
+            if (text.trim().startsWith('<!DOCTYPE') || text.includes('<html') || text.includes('docs-chrome')) {
+                throw new Error('Incorrect Link Type. Please use the "Publish to Web" > "CSV" link.');
+            }
+
             const lines = text.split('\n');
             const newInstruments = [];
 
