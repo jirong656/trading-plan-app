@@ -51,81 +51,118 @@ export function InstrumentProvider({ children }) {
 
     const syncFromSheet = async () => {
         if (!sheetUrl) return;
-        const cleanUrl = sheetUrl.trim();
+        let cleanUrl = sheetUrl.trim();
+
+        // INTELLIGENT FIX: Convert standard "Browser Link" to "CSV Export Link"
+        // This avoids the 'Publish to Web' redirect issues on mobile
+        // Input: .../spreadsheets/d/123XYZ/edit#gid=0
+        // Output: .../spreadsheets/d/123XYZ/export?format=csv&gid=0
+        const idMatch = cleanUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+        // Only transform if it's NOT a 'Publish to Web' link (/d/e/) and looks like a standard sheet
+        if (idMatch && !cleanUrl.includes('/d/e/')) {
+            const docId = idMatch[1];
+            let gid = '0';
+            const gidMatch = cleanUrl.match(/[#&]gid=([0-9]+)/);
+            if (gidMatch) gid = gidMatch[1];
+
+            cleanUrl = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${gid}`;
+            console.log("Transformed URL to Export format:", cleanUrl);
+        }
 
         const fetchWithFallback = async (url) => {
             const errors = [];
 
+            // Add cache buster to bypass aggressive ISP/Browser caching
+            const bustUrl = url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
+
             const isValidCsv = (text) => {
-                // If it starts with HTML tags or JSON, it's bad
-                if (text.trim().startsWith('<!DOCTYPE') || text.includes('<html') || text.trim().startsWith('{')) return false;
-                return true;
+                const t = text.trim();
+                if (!t) return false;
+                if (t.startsWith('<!DOCTYPE') || t.includes('<html') || t.startsWith('{')) return false;
+                // Basic CSV check: at least one comma in the first line
+                return t.split('\n')[0].includes(',');
             };
 
             // Attempt 1: Direct Fetch
             try {
-                const response = await fetch(url);
+                const response = await fetch(bustUrl);
                 if (response.ok) {
                     const text = await response.text();
                     if (isValidCsv(text)) return text;
-                    errors.push(`Direct: Received HTML/Auth Page (Length: ${text.length})`);
+                    errors.push(`Direct: HTML/Auth Page Detected`);
                 } else {
-                    errors.push(`Direct: ${response.status}`);
+                    errors.push(`Direct Error: ${response.status} ${response.statusText}`);
                 }
             } catch (e) {
-                errors.push(`Direct: ${e.message}`);
+                errors.push(`Direct Fetch: ${e.message}`);
             }
 
             // Attempt 2: AllOrigins Proxy
             try {
-                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(bustUrl)}`;
                 const response = await fetch(proxyUrl);
                 if (response.ok) {
                     const text = await response.text();
                     if (isValidCsv(text)) return text;
-                    errors.push(`AllOrigins: Received HTML/Auth`);
+                    errors.push(`AllOrigins: HTML Returned`);
                 } else {
-                    errors.push(`AllOrigins: ${response.status}`);
+                    errors.push(`AllOrigins Error: ${response.status}`);
                 }
             } catch (e) {
-                errors.push(`AllOrigins: ${e.message}`);
+                errors.push(`AllOrigins Fetch: ${e.message}`);
             }
 
-            // Attempt 3: CORSProxy.io
+            // Attempt 3: CodeTabs (Fastest)
             try {
-                const proxyUrl = `https://corsproxy.io/?` + encodeURIComponent(url);
+                const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(bustUrl)}`;
                 const response = await fetch(proxyUrl);
                 if (response.ok) {
                     const text = await response.text();
                     if (isValidCsv(text)) return text;
-                    errors.push(`CORSProxy: Received HTML/Auth`);
+                    errors.push(`CodeTabs: HTML Returned`);
                 } else {
-                    errors.push(`CORSProxy: ${response.status}`);
+                    errors.push(`CodeTabs Error: ${response.status}`);
                 }
             } catch (e) {
-                errors.push(`CORSProxy: ${e.message}`);
+                errors.push(`CodeTabs Fetch: ${e.message}`);
             }
 
-            // Attempt 4: CodeTabs (Very Reliable)
+            // Attempt 4: CORSProxy.io
             try {
-                const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
+                const proxyUrl = `https://corsproxy.io/?` + encodeURIComponent(bustUrl);
                 const response = await fetch(proxyUrl);
                 if (response.ok) {
                     const text = await response.text();
                     if (isValidCsv(text)) return text;
-                    errors.push(`CodeTabs: Received HTML/Auth`);
+                    errors.push(`CORSProxy: HTML Returned`);
                 } else {
-                    errors.push(`CodeTabs: ${response.status}`);
+                    errors.push(`CORSProxy Error: ${response.status}`);
                 }
             } catch (e) {
-                errors.push(`CodeTabs: ${e.message}`);
+                errors.push(`CORSProxy Fetch: ${e.message}`);
+            }
+
+            // Attempt 5: ThingProxy (Last Resort)
+            try {
+                const proxyUrl = `https://thingproxy.freeboard.io/fetch/${bustUrl}`;
+                const response = await fetch(proxyUrl);
+                if (response.ok) {
+                    const text = await response.text();
+                    if (isValidCsv(text)) return text;
+                    errors.push(`ThingProxy: HTML Returned`);
+                } else {
+                    errors.push(`ThingProxy Error: ${response.status}`);
+                }
+            } catch (e) {
+                errors.push(`ThingProxy Fetch: ${e.message}`);
             }
 
             const errorMsg = errors.join('\n');
-            if (errorMsg.includes('401') || errorMsg.includes('403')) {
-                throw new Error(`Access Denied (401/403).\nIs your Sheet published to "Anyone" or just "Your Organization"?\n\nDetails:\n${errorMsg}`);
+            // Check for specific common issues
+            if (errorMsg.includes('401') || errorMsg.includes('403') || errorMsg.includes('HTML')) {
+                throw new Error(`Connection Blocked (401/403/HTML).\nThis usually means Google is asking for a Login or Cookie Consent.\n\nPRO TIP: Use the "Share" link (Anyone with link) instead of "Publish to Web".\n\nDetails:\n${errorMsg}`);
             }
-            throw new Error(`Sync Failed. All proxies returned HTML/Error.\nDetails:\n${errorMsg}`);
+            throw new Error(`Sync Failed. All 5 methods blocked.\nDetails:\n${errorMsg}`);
         };
 
         try {
@@ -133,7 +170,7 @@ export function InstrumentProvider({ children }) {
 
             // Double check (redundant but safe)
             if (text.trim().startsWith('<!DOCTYPE') || text.includes('<html') || text.includes('docs-chrome')) {
-                throw new Error(`Incorrect Link Type. Preview: "${text.substring(0, 50)}..."`);
+                throw new Error(`Integrity Check Failed. Still received HTML.\nPreview: "${text.substring(0, 50)}..."`);
             }
 
             const lines = text.split('\n');

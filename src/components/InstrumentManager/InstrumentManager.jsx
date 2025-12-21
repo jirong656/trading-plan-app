@@ -148,7 +148,7 @@ export default function InstrumentManager() {
 
             {/* Version Indicator for Debugging */}
             <div className="text-center mt-6 text-slate-600 text-[10px] font-mono opacity-50">
-                v1.4 Consent Wall Fix
+                v1.6 Advanced Proxy Fix
             </div>
         </div>
     );
