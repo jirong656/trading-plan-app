@@ -85,7 +85,21 @@ export function InstrumentProvider({ children }) {
                 errors.push(`CORSProxy: ${e.message}`);
             }
 
-            throw new Error(`Sync Failed. Details:\n${errors.join('\n')}`);
+            // Attempt 4: CodeTabs (Very Reliable)
+            try {
+                const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
+                const response = await fetch(proxyUrl);
+                if (response.ok) return await response.text();
+                errors.push(`CodeTabs: ${response.status}`);
+            } catch (e) {
+                errors.push(`CodeTabs: ${e.message}`);
+            }
+
+            const errorMsg = errors.join('\n');
+            if (errorMsg.includes('401') || errorMsg.includes('403')) {
+                throw new Error(`Access Denied (401/403).\nIs your Sheet published to "Anyone" or just "Your Organization"?\n\nDetails:\n${errorMsg}`);
+            }
+            throw new Error(`Sync Failed. Details:\n${errorMsg}`);
         };
 
         try {
