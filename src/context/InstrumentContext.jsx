@@ -51,132 +51,78 @@ export function InstrumentProvider({ children }) {
 
     const syncFromSheet = async () => {
         if (!sheetUrl) return;
-        let cleanUrl = sheetUrl.trim();
+        const rawUrl = sheetUrl.trim();
 
-        // INTELLIGENT FIX: Convert standard "Browser Link" to "CSV Export Link"
-        // This avoids the 'Publish to Web' redirect issues on mobile
-        // Input: .../spreadsheets/d/123XYZ/edit#gid=0
-        // Output: .../spreadsheets/d/123XYZ/export?format=csv&gid=0
-        const idMatch = cleanUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
-        // Only transform if it's NOT a 'Publish to Web' link (/d/e/) and looks like a standard sheet
-        if (idMatch && !cleanUrl.includes('/d/e/')) {
-            const docId = idMatch[1];
-            let gid = '0';
-            const gidMatch = cleanUrl.match(/[#&]gid=([0-9]+)/);
-            if (gidMatch) gid = gidMatch[1];
+        // Extract Document ID and GID
+        const idMatch = rawUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+        const gidMatch = rawUrl.match(/[#&]gid=([0-9]+)/);
+        const docId = idMatch ? idMatch[1] : null;
+        const gid = gidMatch ? gidMatch[1] : '0';
 
-            cleanUrl = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${gid}`;
-            console.log("Transformed URL to Export format:", cleanUrl);
+        // Generate candidate endpoints
+        // 1. Original Provided URL
+        // 2. Export URL (if it's a standard sheet ID)
+        // 3. GViz Query URL (often bypasses consent)
+        const candidates = [rawUrl];
+        if (docId && !rawUrl.includes('/d/e/')) {
+            candidates.push(`https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${gid}`);
+            candidates.push(`https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=${gid}`);
         }
 
-        const fetchWithFallback = async (url) => {
-            const errors = [];
+        const proxies = [
+            { name: 'Direct', wrap: (url) => url + (url.includes('?') ? '&' : '?') + 't=' + Date.now() },
+            { name: 'CodeTabs', wrap: (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}` },
+            { name: 'AllOrigins', wrap: (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}` },
+            { name: 'CORSProxy.io', wrap: (url) => `https://corsproxy.io/?` + encodeURIComponent(url) },
+            { name: 'ThingProxy', wrap: (url) => `https://thingproxy.freeboard.io/fetch/${url}` }
+        ];
 
-            // Add cache buster to bypass aggressive ISP/Browser caching
-            const bustUrl = url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
-
-            const isValidCsv = (text) => {
-                const t = text.trim();
-                if (!t) return false;
-                if (t.startsWith('<!DOCTYPE') || t.includes('<html') || t.startsWith('{')) return false;
-                // Basic CSV check: at least one comma in the first line
-                return t.split('\n')[0].includes(',');
-            };
-
-            // Attempt 1: Direct Fetch
-            try {
-                const response = await fetch(bustUrl);
-                if (response.ok) {
-                    const text = await response.text();
-                    if (isValidCsv(text)) return text;
-                    errors.push(`Direct: HTML/Auth Page Detected`);
-                } else {
-                    errors.push(`Direct Error: ${response.status} ${response.statusText}`);
-                }
-            } catch (e) {
-                errors.push(`Direct Fetch: ${e.message}`);
-            }
-
-            // Attempt 2: AllOrigins Proxy
-            try {
-                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(bustUrl)}`;
-                const response = await fetch(proxyUrl);
-                if (response.ok) {
-                    const text = await response.text();
-                    if (isValidCsv(text)) return text;
-                    errors.push(`AllOrigins: HTML Returned`);
-                } else {
-                    errors.push(`AllOrigins Error: ${response.status}`);
-                }
-            } catch (e) {
-                errors.push(`AllOrigins Fetch: ${e.message}`);
-            }
-
-            // Attempt 3: CodeTabs (Fastest)
-            try {
-                const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(bustUrl)}`;
-                const response = await fetch(proxyUrl);
-                if (response.ok) {
-                    const text = await response.text();
-                    if (isValidCsv(text)) return text;
-                    errors.push(`CodeTabs: HTML Returned`);
-                } else {
-                    errors.push(`CodeTabs Error: ${response.status}`);
-                }
-            } catch (e) {
-                errors.push(`CodeTabs Fetch: ${e.message}`);
-            }
-
-            // Attempt 4: CORSProxy.io
-            try {
-                const proxyUrl = `https://corsproxy.io/?` + encodeURIComponent(bustUrl);
-                const response = await fetch(proxyUrl);
-                if (response.ok) {
-                    const text = await response.text();
-                    if (isValidCsv(text)) return text;
-                    errors.push(`CORSProxy: HTML Returned`);
-                } else {
-                    errors.push(`CORSProxy Error: ${response.status}`);
-                }
-            } catch (e) {
-                errors.push(`CORSProxy Fetch: ${e.message}`);
-            }
-
-            // Attempt 5: ThingProxy (Last Resort)
-            try {
-                const proxyUrl = `https://thingproxy.freeboard.io/fetch/${bustUrl}`;
-                const response = await fetch(proxyUrl);
-                if (response.ok) {
-                    const text = await response.text();
-                    if (isValidCsv(text)) return text;
-                    errors.push(`ThingProxy: HTML Returned`);
-                } else {
-                    errors.push(`ThingProxy Error: ${response.status}`);
-                }
-            } catch (e) {
-                errors.push(`ThingProxy Fetch: ${e.message}`);
-            }
-
-            const errorMsg = errors.join('\n');
-            // Check for specific common issues
-            if (errorMsg.includes('401') || errorMsg.includes('403') || errorMsg.includes('HTML')) {
-                throw new Error(`Connection Blocked (401/403/HTML).\nThis usually means Google is asking for a Login or Cookie Consent.\n\nPRO TIP: Use the "Share" link (Anyone with link) instead of "Publish to Web".\n\nDetails:\n${errorMsg}`);
-            }
-            throw new Error(`Sync Failed. All 5 methods blocked.\nDetails:\n${errorMsg}`);
+        const isValidCsv = (text) => {
+            const t = text.trim();
+            if (!t || t.length < 10) return false;
+            if (t.startsWith('<!DOCTYPE') || t.includes('<html') || t.startsWith('{')) return false;
+            const firstLine = t.split('\n')[0];
+            return firstLine.includes(',') || firstLine.includes('\t');
         };
 
-        try {
-            const text = await fetchWithFallback(cleanUrl);
+        const errors = [];
+        let successData = null;
 
-            // Double check (redundant but safe)
-            if (text.trim().startsWith('<!DOCTYPE') || text.includes('<html') || text.includes('docs-chrome')) {
-                throw new Error(`Integrity Check Failed. Still received HTML.\nPreview: "${text.substring(0, 50)}..."`);
+        // Matrix Try: Each Candidate URL x Each Proxy
+        for (const url of candidates) {
+            for (const proxy of proxies) {
+                try {
+                    const finalUrl = proxy.wrap(url);
+                    const response = await fetch(finalUrl);
+                    if (response.ok) {
+                        const text = await response.text();
+                        if (isValidCsv(text)) {
+                            successData = text;
+                            break;
+                        } else {
+                            errors.push(`${proxy.name}: Received HTML/Invalid (Length: ${text.length})`);
+                        }
+                    } else {
+                        errors.push(`${proxy.name}: HTTP ${response.status}`);
+                    }
+                } catch (e) {
+                    errors.push(`${proxy.name}: ${e.message}`);
+                }
+            }
+            if (successData) break;
+        }
+
+        try {
+            if (!successData) {
+                const combinedErrors = [...new Set(errors)].join(' | ');
+                throw new Error(`Mobile Sync Blocked. Tried ${candidates.length} modes x ${proxies.length} proxies.\nMost likely: Google Consent Wall.\n\nDetails:\n${combinedErrors.substring(0, 300)}...`);
             }
 
+            const text = successData;
             const lines = text.split('\n');
             const newInstruments = [];
 
-            // Skip header
+            // Skip header (handle both \r\n and \n)
             for (let i = 1; i < lines.length; i++) {
                 const line = lines[i].trim();
                 if (!line) continue;
