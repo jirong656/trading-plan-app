@@ -54,16 +54,15 @@ export function InstrumentProvider({ children }) {
         const cleanUrl = sheetUrl.trim();
 
         const fetchWithFallback = async (url) => {
-            let lastError;
+            const errors = [];
 
             // Attempt 1: Direct Fetch
             try {
                 const response = await fetch(url);
                 if (response.ok) return await response.text();
-                lastError = `Direct: ${response.status}`;
+                errors.push(`Direct: ${response.status}`);
             } catch (e) {
-                console.warn("Direct fetch failed", e);
-                lastError = `Direct: ${e.message}`;
+                errors.push(`Direct: ${e.message}`);
             }
 
             // Attempt 2: AllOrigins Proxy
@@ -71,10 +70,9 @@ export function InstrumentProvider({ children }) {
                 const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
                 const response = await fetch(proxyUrl);
                 if (response.ok) return await response.text();
-                lastError = `AllOrigins: ${response.status}`;
+                errors.push(`AllOrigins: ${response.status}`);
             } catch (e) {
-                console.warn("AllOrigins failed", e);
-                lastError = `AllOrigins: ${e.message}`;
+                errors.push(`AllOrigins: ${e.message}`);
             }
 
             // Attempt 3: CORSProxy.io
@@ -82,13 +80,12 @@ export function InstrumentProvider({ children }) {
                 const proxyUrl = `https://corsproxy.io/?` + encodeURIComponent(url);
                 const response = await fetch(proxyUrl);
                 if (response.ok) return await response.text();
-                lastError = `CORSProxy: ${response.status}`;
+                errors.push(`CORSProxy: ${response.status}`);
             } catch (e) {
-                console.warn("CORSProxy failed", e);
-                lastError = `CORSProxy: ${e.message}`;
+                errors.push(`CORSProxy: ${e.message}`);
             }
 
-            throw new Error(`All methods failed. Last error: ${lastError}`);
+            throw new Error(`Sync Failed. Details:\n${errors.join('\n')}`);
         };
 
         try {
