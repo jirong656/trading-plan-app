@@ -56,11 +56,22 @@ export function InstrumentProvider({ children }) {
         const fetchWithFallback = async (url) => {
             const errors = [];
 
+            const isValidCsv = (text) => {
+                // If it starts with HTML tags or JSON, it's bad
+                if (text.trim().startsWith('<!DOCTYPE') || text.includes('<html') || text.trim().startsWith('{')) return false;
+                return true;
+            };
+
             // Attempt 1: Direct Fetch
             try {
                 const response = await fetch(url);
-                if (response.ok) return await response.text();
-                errors.push(`Direct: ${response.status}`);
+                if (response.ok) {
+                    const text = await response.text();
+                    if (isValidCsv(text)) return text;
+                    errors.push(`Direct: Received HTML/Auth Page (Length: ${text.length})`);
+                } else {
+                    errors.push(`Direct: ${response.status}`);
+                }
             } catch (e) {
                 errors.push(`Direct: ${e.message}`);
             }
@@ -69,8 +80,13 @@ export function InstrumentProvider({ children }) {
             try {
                 const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
                 const response = await fetch(proxyUrl);
-                if (response.ok) return await response.text();
-                errors.push(`AllOrigins: ${response.status}`);
+                if (response.ok) {
+                    const text = await response.text();
+                    if (isValidCsv(text)) return text;
+                    errors.push(`AllOrigins: Received HTML/Auth`);
+                } else {
+                    errors.push(`AllOrigins: ${response.status}`);
+                }
             } catch (e) {
                 errors.push(`AllOrigins: ${e.message}`);
             }
@@ -79,8 +95,13 @@ export function InstrumentProvider({ children }) {
             try {
                 const proxyUrl = `https://corsproxy.io/?` + encodeURIComponent(url);
                 const response = await fetch(proxyUrl);
-                if (response.ok) return await response.text();
-                errors.push(`CORSProxy: ${response.status}`);
+                if (response.ok) {
+                    const text = await response.text();
+                    if (isValidCsv(text)) return text;
+                    errors.push(`CORSProxy: Received HTML/Auth`);
+                } else {
+                    errors.push(`CORSProxy: ${response.status}`);
+                }
             } catch (e) {
                 errors.push(`CORSProxy: ${e.message}`);
             }
@@ -89,8 +110,13 @@ export function InstrumentProvider({ children }) {
             try {
                 const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
                 const response = await fetch(proxyUrl);
-                if (response.ok) return await response.text();
-                errors.push(`CodeTabs: ${response.status}`);
+                if (response.ok) {
+                    const text = await response.text();
+                    if (isValidCsv(text)) return text;
+                    errors.push(`CodeTabs: Received HTML/Auth`);
+                } else {
+                    errors.push(`CodeTabs: ${response.status}`);
+                }
             } catch (e) {
                 errors.push(`CodeTabs: ${e.message}`);
             }
@@ -99,16 +125,15 @@ export function InstrumentProvider({ children }) {
             if (errorMsg.includes('401') || errorMsg.includes('403')) {
                 throw new Error(`Access Denied (401/403).\nIs your Sheet published to "Anyone" or just "Your Organization"?\n\nDetails:\n${errorMsg}`);
             }
-            throw new Error(`Sync Failed. Details:\n${errorMsg}`);
+            throw new Error(`Sync Failed. All proxies returned HTML/Error.\nDetails:\n${errorMsg}`);
         };
 
         try {
             const text = await fetchWithFallback(cleanUrl);
 
-            // Check if user provided a standard Google Sheet link (HTML) instead of CSV
-            // Also detection for JSON responses if proxies fail to unwrap
-            if (text.trim().startsWith('<!DOCTYPE') || text.includes('<html') || text.includes('docs-chrome') || text.trim().startsWith('{')) {
-                throw new Error(`Incorrect Link Type. Received HTML/JSON instead of CSV.\nPreview: "${text.substring(0, 100)}..."`);
+            // Double check (redundant but safe)
+            if (text.trim().startsWith('<!DOCTYPE') || text.includes('<html') || text.includes('docs-chrome')) {
+                throw new Error(`Incorrect Link Type. Preview: "${text.substring(0, 50)}..."`);
             }
 
             const lines = text.split('\n');
