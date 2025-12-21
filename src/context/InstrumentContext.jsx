@@ -169,6 +169,54 @@ export function InstrumentProvider({ children }) {
         }
     };
 
+    const importFromCSV = async (file) => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const text = e.target.result;
+                    const lines = text.split('\n');
+                    const newInstruments = [];
+
+                    for (let i = 1; i < lines.length; i++) {
+                        const line = lines[i].trim();
+                        if (!line) continue;
+
+                        let parts = [];
+                        if (line.includes('\t')) parts = line.split('\t');
+                        else if (line.includes(';')) parts = line.split(';');
+                        else parts = line.split(',');
+
+                        if (parts.length < 2) continue;
+
+                        const [symbol, tickSize, tickValue, tickPerPoint, pointValue, icebergThreshold, stopThreshold] = parts;
+
+                        if (symbol && tickSize) {
+                            newInstruments.push({
+                                id: crypto.randomUUID(),
+                                symbol: symbol.replace(/"/g, '').trim(),
+                                tickSize: parseFloat(tickSize),
+                                tickValue: parseFloat(tickValue),
+                                tickPerPoint: parseFloat(tickPerPoint),
+                                pointValue: parseFloat(pointValue),
+                                icebergThreshold: parseFloat(icebergThreshold) || 0,
+                                stopThreshold: parseFloat(stopThreshold) || 0
+                            });
+                        }
+                    }
+
+                    if (newInstruments.length === 0) throw new Error("No valid data found");
+                    setInstruments(newInstruments);
+                    resolve({ success: true, count: newInstruments.length });
+                } catch (err) {
+                    resolve({ success: false, error: err.message });
+                }
+            };
+            reader.onerror = () => resolve({ success: false, error: "File read error" });
+            reader.readAsText(file);
+        });
+    };
+
     return (
         <InstrumentContext.Provider value={{
             instruments,
@@ -178,7 +226,8 @@ export function InstrumentProvider({ children }) {
             sheetUrl,
             setSheetUrl,
             isReadOnly,
-            syncFromSheet
+            syncFromSheet,
+            importFromCSV
         }}>
             {children}
         </InstrumentContext.Provider>
