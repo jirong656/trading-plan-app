@@ -14,7 +14,7 @@ export default function PlanCard({ plan, onDelete }) {
                     <h4 className="text-xl font-bold text-white flex items-center gap-2">
                         <span className="text-cyan-400">{instrumentSymbol}</span>
                         <span className="text-slate-500 text-sm font-normal">
-                            Risk: ${parseFloat(riskCapital).toFixed(2)}
+                            Total Risk Used: ${parseFloat(riskCapital).toFixed(2)}
                         </span>
                     </h4>
                     <span className="text-xs text-slate-500 flex items-center gap-1 mt-1">
@@ -86,6 +86,6 @@ export default function PlanCard({ plan, onDelete }) {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }
