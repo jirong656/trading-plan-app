@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 import InstrumentManager from './components/InstrumentManager/InstrumentManager';
 import TradingDashboard from './components/TradingDashboard/TradingDashboard';
 import ContractCalculator from './components/ContractCalculator/ContractCalculator';
+import ZonePlanCalculator from './components/ContractCalculator/ZonePlanCalculator';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -16,6 +17,7 @@ function App() {
           {activeTab === 'dashboard' && <TradingDashboard />}
           {activeTab === 'instruments' && <InstrumentManager />}
           {activeTab === 'calculator' && <ContractCalculator />}
+          {activeTab === 'zoneplanner' && <ZonePlanCalculator />}
         </Layout>
       </PlanProvider>
     </InstrumentProvider>

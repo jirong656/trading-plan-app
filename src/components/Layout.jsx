@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutDashboard, Database, Settings, Calculator } from 'lucide-react';
+import { LayoutDashboard, Database, Settings, Calculator, BoxSelect } from 'lucide-react';
 import clsx from 'clsx';
 
 export default function Layout({ children, activeTab, onTabChange }) {
@@ -35,6 +35,12 @@ export default function Layout({ children, activeTab, onTabChange }) {
                                 onClick={() => onTabChange('calculator')}
                                 icon={<Calculator size={18} />}
                                 label="Calculator"
+                            />
+                            <NavButton
+                                active={activeTab === 'zoneplanner'}
+                                onClick={() => onTabChange('zoneplanner')}
+                                icon={<BoxSelect size={18} />}
+                                label="Zone Plan"
                             />
                         </div>
                     </div>
