@@ -94,6 +94,14 @@ export function InstrumentProvider({ children }) {
             // Support comma, tab, or semicolon (Europe)
             return firstLine.includes(',') || firstLine.includes('\t') || firstLine.includes(';');
         };
+        // Helper to parse currency/text to float safely
+        const parseValidFloat = (val) => {
+            if (!val) return 0;
+            // Remove currency symbols, commas, and whitespace
+            const clean = val.toString().replace(/[$,€£\s]/g, '');
+            const num = parseFloat(clean);
+            return isNaN(num) ? 0 : num;
+        };
 
         const errors = [];
         let successData = null;
@@ -150,12 +158,12 @@ export function InstrumentProvider({ children }) {
                     newInstruments.push({
                         id: crypto.randomUUID(),
                         symbol: symbol.replace(/"/g, '').trim(),
-                        tickSize: parseFloat(tickSize),
-                        tickValue: parseFloat(tickValue),
-                        tickPerPoint: parseFloat(tickPerPoint),
-                        pointValue: parseFloat(pointValue),
-                        icebergThreshold: parseFloat(icebergThreshold) || 0,
-                        stopThreshold: parseFloat(stopThreshold) || 0
+                        tickSize: parseValidFloat(tickSize),
+                        tickValue: parseValidFloat(tickValue),
+                        tickPerPoint: parseValidFloat(tickPerPoint),
+                        pointValue: parseValidFloat(pointValue),
+                        icebergThreshold: parseValidFloat(icebergThreshold),
+                        stopThreshold: parseValidFloat(stopThreshold)
                     });
                 }
             }
@@ -178,6 +186,14 @@ export function InstrumentProvider({ children }) {
                     const lines = text.split('\n');
                     const newInstruments = [];
 
+                    // Helper to parse currency/text to float safely (Internal scope for FileReader)
+                    const parseValidFloat = (val) => {
+                        if (!val) return 0;
+                        const clean = val.toString().replace(/[$,€£\s]/g, '');
+                        const num = parseFloat(clean);
+                        return isNaN(num) ? 0 : num;
+                    };
+
                     for (let i = 1; i < lines.length; i++) {
                         const line = lines[i].trim();
                         if (!line) continue;
@@ -195,12 +211,12 @@ export function InstrumentProvider({ children }) {
                             newInstruments.push({
                                 id: crypto.randomUUID(),
                                 symbol: symbol.replace(/"/g, '').trim(),
-                                tickSize: parseFloat(tickSize),
-                                tickValue: parseFloat(tickValue),
-                                tickPerPoint: parseFloat(tickPerPoint),
-                                pointValue: parseFloat(pointValue),
-                                icebergThreshold: parseFloat(icebergThreshold) || 0,
-                                stopThreshold: parseFloat(stopThreshold) || 0
+                                tickSize: parseValidFloat(tickSize),
+                                tickValue: parseValidFloat(tickValue),
+                                tickPerPoint: parseValidFloat(tickPerPoint),
+                                pointValue: parseValidFloat(pointValue),
+                                icebergThreshold: parseValidFloat(icebergThreshold),
+                                stopThreshold: parseValidFloat(stopThreshold)
                             });
                         }
                     }

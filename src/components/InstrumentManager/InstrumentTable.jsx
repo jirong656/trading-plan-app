@@ -31,10 +31,10 @@ export default function InstrumentTable({ onEdit, isReadOnly }) {
                     {instruments.map((inst) => (
                         <tr key={inst.id} className="hover:bg-slate-700/30 transition-colors">
                             <td className="p-4 font-bold text-cyan-400">{inst.symbol}</td>
-                            <td className="p-4 font-mono text-slate-300">{inst.tickSize?.toFixed(6)}</td>
-                            <td className="p-4 font-mono text-slate-300">${inst.tickValue?.toFixed(6)}</td>
-                            <td className="p-4 font-mono text-slate-300">{inst.tickPerPoint?.toFixed(6)}</td>
-                            <td className="p-4 font-mono text-emerald-400 font-semibold">${inst.pointValue?.toFixed(6)}</td>
+                            <td className="p-4 font-mono text-slate-300">{inst.tickSize?.toFixed(7)}</td>
+                            <td className="p-4 font-mono text-slate-300">{inst.tickValue?.toFixed(7)}</td>
+                            <td className="p-4 font-mono text-slate-300">{inst.tickPerPoint?.toFixed(7)}</td>
+                            <td className="p-4 font-mono text-emerald-400 font-semibold">{inst.pointValue?.toFixed(7)}</td>
                             <td className="p-4 font-mono text-slate-300">{inst.icebergThreshold}</td>
                             <td className="p-4 font-mono text-slate-300">{inst.stopThreshold}</td>
                             {!isReadOnly && (
