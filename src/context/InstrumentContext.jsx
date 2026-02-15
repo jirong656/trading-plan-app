@@ -238,12 +238,7 @@ export function InstrumentProvider({ children }) {
                         stop: getIndex(['stop', 'stopthreshold'])
                     };
 
-                    // DEBUG ALERT: Critical info
-                    if (lines.length > 1) {
-                        // Show indices & first line to check alignment
-                        const firstLineAbbr = lines[1].substring(0, 50) + "...";
-                        window.alert(`DEBUG:\n Indices: TickPerPoint=${map.tickPerPoint}, Ice=${map.iceberg}, Stop=${map.stop}\n First Row: "${firstLineAbbr}"`);
-                    }
+
 
                     if (map.symbol === -1 || map.tickSize === -1) {
                         throw new Error(`Import Error: Missing 'Symbol' or 'Tick Size'.\nFound: [${headers.join(', ')}]`);
