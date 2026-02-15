@@ -223,10 +223,6 @@ export function InstrumentProvider({ children }) {
                     // Normalized headers array
                     const headers = headerLine.split(delimiter).map(h => h.trim().toLowerCase().replace(/['"]+/g, ''));
 
-                    // DEBUG ALERT: Show user exactly what the app sees
-                    window.alert(`DEBUG: Headers Found -> [${headers.join(' | ')}]`);
-                    console.log("Parsed Headers:", headers);
-
                     // 2. Map Headers
                     const getIndex = (keywords) => {
                         return headers.findIndex(h => keywords.some(k => h === k || h.includes(k)));
@@ -236,11 +232,18 @@ export function InstrumentProvider({ children }) {
                         symbol: getIndex(['symbol', 'instrument', 'contract']),
                         tickSize: getIndex(['tick size', 'ticksize']),
                         tickValue: getIndex(['tick value', 'tickvalue']),
-                        tickPerPoint: getIndex(['tick/point', 'ticks per point', 'tick per point']),
-                        pointValue: getIndex(['point value', 'pointvalue']),
+                        tickPerPoint: getIndex(['tick/point', 'ticks per point', 'tick per point', 'tickperpoint']),
+                        pointValue: getIndex(['point value', 'pointvalue', 'point val', 'pt value']),
                         iceberg: getIndex(['iceberg', 'icebergthreshold']),
                         stop: getIndex(['stop', 'stopthreshold'])
                     };
+
+                    // DEBUG ALERT: Critical info
+                    if (lines.length > 1) {
+                        // Show indices & first line to check alignment
+                        const firstLineAbbr = lines[1].substring(0, 50) + "...";
+                        window.alert(`DEBUG:\n Indices: TickPerPoint=${map.tickPerPoint}, Ice=${map.iceberg}, Stop=${map.stop}\n First Row: "${firstLineAbbr}"`);
+                    }
 
                     if (map.symbol === -1 || map.tickSize === -1) {
                         throw new Error(`Import Error: Missing 'Symbol' or 'Tick Size'.\nFound: [${headers.join(', ')}]`);
@@ -255,6 +258,11 @@ export function InstrumentProvider({ children }) {
 
                         // Safe extraction with quote stripping for string fields
                         const getStr = (idx) => idx !== -1 && parts[idx] ? parts[idx].replace(/['"]/g, '').trim() : '';
+                        // Safe float extraction - check index bounds too
+                        const getFloat = (idx) => {
+                            if (idx === -1 || idx >= parts.length || !parts[idx]) return 0;
+                            return parseValidFloat(parts[idx]);
+                        };
 
                         const symbol = getStr(map.symbol);
                         if (!symbol) continue;
@@ -262,12 +270,12 @@ export function InstrumentProvider({ children }) {
                         newInstruments.push({
                             id: crypto.randomUUID(),
                             symbol: symbol,
-                            tickSize: map.tickSize !== -1 ? parseValidFloat(parts[map.tickSize]) : 0,
-                            tickValue: map.tickValue !== -1 ? parseValidFloat(parts[map.tickValue]) : 0,
-                            tickPerPoint: map.tickPerPoint !== -1 ? parseValidFloat(parts[map.tickPerPoint]) : 0,
-                            pointValue: map.pointValue !== -1 ? parseValidFloat(parts[map.pointValue]) : 0,
-                            icebergThreshold: map.iceberg !== -1 ? parseValidFloat(parts[map.iceberg]) : 0,
-                            stopThreshold: map.stop !== -1 ? parseValidFloat(parts[map.stop]) : 0
+                            tickSize: getFloat(map.tickSize),
+                            tickValue: getFloat(map.tickValue),
+                            tickPerPoint: getFloat(map.tickPerPoint),
+                            pointValue: getFloat(map.pointValue),
+                            icebergThreshold: getFloat(map.iceberg),
+                            stopThreshold: getFloat(map.stop)
                         });
                     }
 
