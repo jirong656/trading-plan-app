@@ -36,7 +36,7 @@ export default function TradingDashboard() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {plans.map(plan => (
+                        {plans.filter(p => !p.type || p.type !== 'negrr').map(plan => (
                             <PlanCard key={plan.id} plan={plan} onDelete={deletePlan} />
                         ))}
                     </div>
