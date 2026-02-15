@@ -183,10 +183,10 @@ export function InstrumentProvider({ children }) {
             reader.onload = (e) => {
                 try {
                     const text = e.target.result;
-                    const lines = text.split('\n');
+                    const lines = text.split('\n').filter(line => line.trim() !== '');
                     const newInstruments = [];
 
-                    // Helper to parse currency/text to float safely (Internal scope for FileReader)
+                    // Helper to parse currency/text to float safely
                     const parseValidFloat = (val) => {
                         if (!val) return 0;
                         const clean = val.toString().replace(/[$,€£\s]/g, '');
@@ -194,37 +194,61 @@ export function InstrumentProvider({ children }) {
                         return isNaN(num) ? 0 : num;
                     };
 
-                    for (let i = 1; i < lines.length; i++) {
-                        const line = lines[i].trim();
-                        if (!line) continue;
+                    if (lines.length < 2) throw new Error("File is empty or missing headers");
 
-                        let parts = [];
-                        if (line.includes('\t')) parts = line.split('\t');
-                        else if (line.includes(';')) parts = line.split(';');
-                        else parts = line.split(',');
+                    // 1. Identify Header Row
+                    const headerRow = lines[0].toLowerCase();
+                    let delimiter = ',';
+                    if (headerRow.includes('\t')) delimiter = '\t';
+                    else if (headerRow.includes(';')) delimiter = ';';
 
-                        if (parts.length < 2) continue;
+                    const headers = headerRow.split(delimiter).map(h => h.trim().replace(/['"]+/g, ''));
 
-                        const [symbol, tickSize, tickValue, tickPerPoint, pointValue, icebergThreshold, stopThreshold] = parts;
+                    // 2. Map Headers to Field Names
+                    const map = {
+                        symbol: headers.findIndex(h => h.includes('symbol') || h.includes('instrument')),
+                        tickSize: headers.findIndex(h => h.includes('tick size')),
+                        tickValue: headers.findIndex(h => h.includes('tick value')),
+                        tickPerPoint: headers.findIndex(h => h.includes('tick') && h.includes('point') && !h.includes('value')), // matches "tick/point"
+                        pointValue: headers.findIndex(h => h.includes('point value')),
+                        iceberg: headers.findIndex(h => h.includes('iceberg') || h.includes('threshold')),
+                        stop: headers.findIndex(h => h.includes('stop'))
+                    };
 
-                        if (symbol && tickSize) {
-                            newInstruments.push({
-                                id: crypto.randomUUID(),
-                                symbol: symbol.replace(/"/g, '').trim(),
-                                tickSize: parseValidFloat(tickSize),
-                                tickValue: parseValidFloat(tickValue),
-                                tickPerPoint: parseValidFloat(tickPerPoint),
-                                pointValue: parseValidFloat(pointValue),
-                                icebergThreshold: parseValidFloat(icebergThreshold),
-                                stopThreshold: parseValidFloat(stopThreshold)
-                            });
-                        }
+                    // Check if critical headers are found
+                    if (map.symbol === -1 || map.tickSize === -1) {
+                        throw new Error("Could not find 'Symbol' or 'Tick Size' columns. Please check CSV headers.");
                     }
 
-                    if (newInstruments.length === 0) throw new Error("No valid data found");
+                    // 3. Parse Data Rows
+                    for (let i = 1; i < lines.length; i++) {
+                        const line = lines[i];
+                        // Handle quotes if CSV is complex, but simple split for now based on user data
+                        const parts = line.split(delimiter);
+
+                        // Skip malformed lines
+                        if (parts.length < Math.max(map.symbol, map.tickSize)) continue;
+
+                        const symbol = parts[map.symbol]?.replace(/"/g, '').trim();
+                        if (!symbol) continue;
+
+                        newInstruments.push({
+                            id: crypto.randomUUID(),
+                            symbol: symbol,
+                            tickSize: parseValidFloat(parts[map.tickSize]),
+                            tickValue: map.tickValue !== -1 ? parseValidFloat(parts[map.tickValue]) : 0,
+                            tickPerPoint: map.tickPerPoint !== -1 ? parseValidFloat(parts[map.tickPerPoint]) : 0,
+                            pointValue: map.pointValue !== -1 ? parseValidFloat(parts[map.pointValue]) : 0,
+                            icebergThreshold: map.iceberg !== -1 ? parseValidFloat(parts[map.iceberg]) : 0,
+                            stopThreshold: map.stop !== -1 ? parseValidFloat(parts[map.stop]) : 0
+                        });
+                    }
+
+                    if (newInstruments.length === 0) throw new Error("No valid instruments found");
                     setInstruments(newInstruments);
                     resolve({ success: true, count: newInstruments.length });
                 } catch (err) {
+                    console.error("CSV Import Error:", err);
                     resolve({ success: false, error: err.message });
                 }
             };
