@@ -197,27 +197,39 @@ export function InstrumentProvider({ children }) {
                     if (lines.length < 2) throw new Error("File is empty or missing headers");
 
                     // 1. Identify Header Row
-                    const headerRow = lines[0].toLowerCase();
+                    let headerLine = lines[0].trim();
+                    // Remove BOM if present
+                    if (headerLine.charCodeAt(0) === 0xFEFF) {
+                        headerLine = headerLine.substr(1);
+                    }
+
+                    const headerRow = headerLine.toLowerCase();
                     let delimiter = ',';
                     if (headerRow.includes('\t')) delimiter = '\t';
                     else if (headerRow.includes(';')) delimiter = ';';
 
+                    // Normalized headers array
                     const headers = headerRow.split(delimiter).map(h => h.trim().replace(/['"]+/g, ''));
+                    console.log("Detected Headers:", headers); // For debugging
 
-                    // 2. Map Headers to Field Names
+                    // 2. Map Headers to Field Names (Priority matching)
+                    const getIndex = (keywords) => {
+                        return headers.findIndex(h => keywords.some(k => h === k || h.includes(k)));
+                    };
+
                     const map = {
-                        symbol: headers.findIndex(h => h.includes('symbol') || h.includes('instrument')),
-                        tickSize: headers.findIndex(h => h.includes('tick size')),
-                        tickValue: headers.findIndex(h => h.includes('tick value')),
-                        tickPerPoint: headers.findIndex(h => h.includes('tick') && h.includes('point') && !h.includes('value')), // matches "tick/point"
-                        pointValue: headers.findIndex(h => h.includes('point value')),
-                        iceberg: headers.findIndex(h => h.includes('iceberg') || h.includes('threshold')),
-                        stop: headers.findIndex(h => h.includes('stop'))
+                        symbol: getIndex(['symbol', 'instrument', 'contract']),
+                        tickSize: getIndex(['tick size', 'ticksize']),
+                        tickValue: getIndex(['tick value', 'tickvalue']),
+                        tickPerPoint: getIndex(['tick/point', 'ticks per point', 'tick per point']),
+                        pointValue: getIndex(['point value', 'pointvalue']),
+                        iceberg: getIndex(['iceberg', 'icebergthreshold']),
+                        stop: getIndex(['stop', 'stopthreshold'])
                     };
 
                     // Check if critical headers are found
                     if (map.symbol === -1 || map.tickSize === -1) {
-                        throw new Error("Could not find 'Symbol' or 'Tick Size' columns. Please check CSV headers.");
+                        throw new Error(`Import Error: Could not find 'Symbol' or 'Tick Size' columns.\nFound headers: [${headers.join(', ')}]\nPlease ensure CSV has 'Symbol' and 'Tick Size' headers.`);
                     }
 
                     // 3. Parse Data Rows
@@ -226,16 +238,16 @@ export function InstrumentProvider({ children }) {
                         // Handle quotes if CSV is complex, but simple split for now based on user data
                         const parts = line.split(delimiter);
 
-                        // Skip malformed lines
-                        if (parts.length < Math.max(map.symbol, map.tickSize)) continue;
+                        // Skip empty lines or lines with insufficient columns
+                        if (parts.length < 2) continue;
 
-                        const symbol = parts[map.symbol]?.replace(/"/g, '').trim();
+                        const symbol = map.symbol !== -1 ? parts[map.symbol]?.replace(/"/g, '').trim() : '';
                         if (!symbol) continue;
 
                         newInstruments.push({
                             id: crypto.randomUUID(),
                             symbol: symbol,
-                            tickSize: parseValidFloat(parts[map.tickSize]),
+                            tickSize: map.tickSize !== -1 ? parseValidFloat(parts[map.tickSize]) : 0,
                             tickValue: map.tickValue !== -1 ? parseValidFloat(parts[map.tickValue]) : 0,
                             tickPerPoint: map.tickPerPoint !== -1 ? parseValidFloat(parts[map.tickPerPoint]) : 0,
                             pointValue: map.pointValue !== -1 ? parseValidFloat(parts[map.pointValue]) : 0,
