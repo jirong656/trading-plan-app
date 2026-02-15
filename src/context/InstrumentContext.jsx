@@ -183,15 +183,22 @@ export function InstrumentProvider({ children }) {
             reader.onload = (e) => {
                 try {
                     const text = e.target.result;
-                    const lines = text.split('\n').filter(line => line.trim() !== '');
+                    // Robust line splitting for iOS/Windows/Mac/Linux
+                    const lines = text.split(/\r\n|\n|\r/).filter(line => line.trim() !== '');
                     const newInstruments = [];
 
-                    // Helper to parse currency/text to float safely
+                    // Aggressive Float Parser: Removes ANYTHING that isn't a number, dot, or minus
                     const parseValidFloat = (val) => {
                         if (!val) return 0;
-                        const clean = val.toString().replace(/[$,€£\s]/g, '');
+                        // Strip quotes first
+                        let clean = val.toString().replace(/['"]/g, '').trim();
+                        // Strip currency and spaces
+                        clean = clean.replace(/[$,€£\s]/g, '');
+                        // If it's pure NaN text, return 0
+                        if (clean.toLowerCase() === 'nan') return 0;
+
                         const num = parseFloat(clean);
-                        return isNaN(num) ? 0 : num;
+                        return isFinite(num) ? num : 0;
                     };
 
                     if (lines.length < 2) throw new Error("File is empty or missing headers");
@@ -199,20 +206,28 @@ export function InstrumentProvider({ children }) {
                     // 1. Identify Header Row
                     let headerLine = lines[0].trim();
                     // Remove BOM if present
-                    if (headerLine.charCodeAt(0) === 0xFEFF) {
-                        headerLine = headerLine.substr(1);
-                    }
+                    if (headerLine.charCodeAt(0) === 0xFEFF) headerLine = headerLine.substr(1);
 
                     const headerRow = headerLine.toLowerCase();
+
+                    // Better Delimiter Detection (Winner takes all)
+                    const count = (char) => (headerRow.match(new RegExp(`\\${char}`, 'g')) || []).length;
+                    const commas = count(',');
+                    const tabs = count('\t');
+                    const semis = count(';');
+
                     let delimiter = ',';
-                    if (headerRow.includes('\t')) delimiter = '\t';
-                    else if (headerRow.includes(';')) delimiter = ';';
+                    if (tabs > commas && tabs > semis) delimiter = '\t';
+                    else if (semis > commas && semis > tabs) delimiter = ';';
 
                     // Normalized headers array
-                    const headers = headerRow.split(delimiter).map(h => h.trim().replace(/['"]+/g, ''));
-                    console.log("Detected Headers:", headers); // For debugging
+                    const headers = headerLine.split(delimiter).map(h => h.trim().toLowerCase().replace(/['"]+/g, ''));
 
-                    // 2. Map Headers to Field Names (Priority matching)
+                    // DEBUG ALERT: Show user exactly what the app sees
+                    window.alert(`DEBUG: Headers Found -> [${headers.join(' | ')}]`);
+                    console.log("Parsed Headers:", headers);
+
+                    // 2. Map Headers
                     const getIndex = (keywords) => {
                         return headers.findIndex(h => keywords.some(k => h === k || h.includes(k)));
                     };
@@ -227,21 +242,21 @@ export function InstrumentProvider({ children }) {
                         stop: getIndex(['stop', 'stopthreshold'])
                     };
 
-                    // Check if critical headers are found
                     if (map.symbol === -1 || map.tickSize === -1) {
-                        throw new Error(`Import Error: Could not find 'Symbol' or 'Tick Size' columns.\nFound headers: [${headers.join(', ')}]\nPlease ensure CSV has 'Symbol' and 'Tick Size' headers.`);
+                        throw new Error(`Import Error: Missing 'Symbol' or 'Tick Size'.\nFound: [${headers.join(', ')}]`);
                     }
 
                     // 3. Parse Data Rows
                     for (let i = 1; i < lines.length; i++) {
                         const line = lines[i];
-                        // Handle quotes if CSV is complex, but simple split for now based on user data
                         const parts = line.split(delimiter);
 
-                        // Skip empty lines or lines with insufficient columns
                         if (parts.length < 2) continue;
 
-                        const symbol = map.symbol !== -1 ? parts[map.symbol]?.replace(/"/g, '').trim() : '';
+                        // Safe extraction with quote stripping for string fields
+                        const getStr = (idx) => idx !== -1 && parts[idx] ? parts[idx].replace(/['"]/g, '').trim() : '';
+
+                        const symbol = getStr(map.symbol);
                         if (!symbol) continue;
 
                         newInstruments.push({
@@ -256,11 +271,11 @@ export function InstrumentProvider({ children }) {
                         });
                     }
 
-                    if (newInstruments.length === 0) throw new Error("No valid instruments found");
+                    if (newInstruments.length === 0) throw new Error("No valid instruments parsed.");
                     setInstruments(newInstruments);
                     resolve({ success: true, count: newInstruments.length });
                 } catch (err) {
-                    console.error("CSV Import Error:", err);
+                    console.error("CSV Import Crash:", err);
                     resolve({ success: false, error: err.message });
                 }
             };
