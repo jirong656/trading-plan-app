@@ -6,6 +6,7 @@ import InstrumentManager from './components/InstrumentManager/InstrumentManager'
 import TradingDashboard from './components/TradingDashboard/TradingDashboard';
 import ContractCalculator from './components/ContractCalculator/ContractCalculator';
 import ZonePlanCalculator from './components/ContractCalculator/ZonePlanCalculator';
+import NegRRManager from './components/NegRR/NegRRManager';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -18,6 +19,7 @@ function App() {
           {activeTab === 'instruments' && <InstrumentManager />}
           {activeTab === 'calculator' && <ContractCalculator />}
           {activeTab === 'zoneplanner' && <ZonePlanCalculator />}
+          {activeTab === 'negrr' && <NegRRManager />}
         </Layout>
       </PlanProvider>
     </InstrumentProvider>
