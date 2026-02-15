@@ -34,8 +34,16 @@ export function PlanProvider({ children }) {
         setDailySettings(prev => ({ ...prev, ...settings }));
     };
 
+    // Safe UUID generator for compatibility
+    const generateId = () => {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+        return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    };
+
     const addPlan = (plan) => {
-        setPlans(prev => [{ ...plan, id: crypto.randomUUID(), createdAt: new Date().toISOString() }, ...prev]);
+        setPlans(prev => [{ ...plan, id: generateId(), createdAt: new Date().toISOString() }, ...prev]);
     };
 
     const updatePlan = (id, updatedData) => {
