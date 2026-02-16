@@ -276,6 +276,7 @@ export function InstrumentProvider({ children }) {
 
                     if (newInstruments.length === 0) throw new Error("No valid instruments parsed.");
                     setInstruments(newInstruments);
+                    setSheetUrl(''); // Switch to local mode to ensure persistence
                     resolve({ success: true, count: newInstruments.length });
                 } catch (err) {
                     console.error("CSV Import Crash:", err);
